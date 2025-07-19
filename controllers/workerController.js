@@ -6,52 +6,76 @@ const { Worker } = require('../models');
 exports.handleUpload = async (req, res) => {
   try {
     const filePath = path.join(__dirname, '..', req.file.path);
+
+    // Baca file Excel dan konversi langsung ke JSON
     const workbook = XLSX.readFile(filePath);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const csvString = XLSX.utils.sheet_to_csv(sheet);
-    const lines = csvString.trim().split('\n');
+    const jsonRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
     let skipCount = 0;
-    const rows = lines.map((line, index) => {
-      const columns = line
-        .match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g)
-        ?.map(col => col.replace(/^"|"$/g, '').trim());
+    const invalidRows = [];
+    const validRows = [];
 
-      if (!columns || columns.length < 5) return null;
+    // Lewati header (baris pertama)
+    for (let i = 1; i < jsonRows.length; i++) {
+      const row = jsonRows[i];
 
-      return {
-        nopek: columns[0],
-        nama: columns[1],
-        area: columns[2],
-        nohp: columns[3],
-        isPekerja: columns[4]
-      };
-    }).filter(row => {
-      if (row === null) {
+      const [nopek, nama, area, nohp, isPekerja] = row.map(cell => String(cell).trim());
+
+      // Cek validitas kolom
+      if (!nopek || !nama || !area || !nohp || !isPekerja || row.length < 5) {
         skipCount++;
-        return false;
+        invalidRows.push({
+          line: i + 1, // baris excel (1-based)
+          raw: row.join(','),
+          parsed: {
+            nopek: nopek || null,
+            nama: nama || null,
+            area: area || null,
+            nohp: nohp || null,
+            isPekerja: isPekerja || null
+          },
+          reason: 'Jumlah kolom kurang atau ada nilai kosong'
+        });
+        continue;
       }
-      return true;
-    });
 
-
-    if (rows.length === 0) {
-      fs.unlinkSync(filePath);
-      return res.status(400).json({ message: 'Semua data tidak valid atau kosong.' });
+      validRows.push({
+        nopek,
+        nama,
+        area,
+        nohp,
+        isPekerja: isPekerja.toLowerCase()
+      });
     }
 
+    // Jika semua data tidak valid
+    if (validRows.length === 0) {
+      fs.unlinkSync(filePath);
+      return res.status(400).json({
+        message: 'Semua data tidak valid atau kosong.',
+        totalDiterima: 0,
+        totalDilewati: skipCount,
+        dataDilewati: invalidRows
+      });
+    }
+
+    // Simpan data ke DB dalam chunk
     const chunkSize = 500;
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize);
+    for (let i = 0; i < validRows.length; i += chunkSize) {
+      const chunk = validRows.slice(i, i + chunkSize);
       await Worker.bulkCreate(chunk);
     }
 
+    // Hapus file sementara
     fs.unlinkSync(filePath);
 
-    res.status(200).json({
+    // Kirim respon sukses
+    return res.status(200).json({
       message: 'Berhasil upload data pekerja',
-      totalDiterima: rows.length,
-      totalDilewati: skipCount
+      totalDiterima: validRows.length,
+      totalDilewati: skipCount,
+      dataDilewati: invalidRows
     });
   } catch (err) {
     console.error('[UPLOAD ERROR]', err);
