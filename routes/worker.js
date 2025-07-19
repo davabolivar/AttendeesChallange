@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const AttendanceController = require('../controllers/attendanceController');
+const path = require('path');
+const workerController = require('../controllers/workerController');
 
-// setup multer
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/');
+    cb(null, './uploads');
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + '-' + file.originalname);
@@ -14,10 +14,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Rute import data absensi
-router.post('/upload/attendance', upload.single('file'), AttendanceController.handleUpload);
-
-// (nanti) Rute summary
-// router.get('/summary', AttendanceController.getSummary);
+router.post('/upload/worker', upload.single('file'), workerController.handleUpload);
 
 module.exports = router;
