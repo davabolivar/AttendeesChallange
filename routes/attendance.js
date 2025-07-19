@@ -14,8 +14,11 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+const mainController = require('../controllers/mainController');
+
 // Rute import data absensi
 router.post('/upload/attendance', upload.single('file'), AttendanceController.handleUpload);
+router.get('/rekap', mainController.getAttendanceRekap);
 
 // (nanti) Rute summary
 // router.get('/summary', AttendanceController.getSummary);

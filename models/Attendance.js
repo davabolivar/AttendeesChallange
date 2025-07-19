@@ -15,5 +15,9 @@ module.exports = (sequelize, DataTypes) => {
 
   });
 
+  Attendance.associate = (models) => {
+    Attendance.belongsTo(models.Worker, { foreignKey: 'nopek', targetKey: 'nopek' });
+  };
+
   return Attendance;
 };

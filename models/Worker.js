@@ -10,6 +10,10 @@ module.exports = (sequelize, DataTypes) => {
     tableName: 'Workers',
     timestamps: false
   });
+  
+  Worker.associate = (models) => {
+    Worker.hasMany(models.Attendance, { foreignKey: 'nopek', sourceKey: 'nopek' });
+  };
 
   return Worker;
 };
