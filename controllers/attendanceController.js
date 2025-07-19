@@ -1,63 +1,62 @@
-const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
-const { Attendance } = require('../models'); // pastikan destructuring
+const { parse } = require('csv-parse');
+const dayjs = require('dayjs');
+const { Attendance } = require('../models');
 
 exports.handleUpload = async (req, res) => {
+  const filePath = path.join(__dirname, '..', req.file.path);
+  const results = [];
+
   try {
-    const filePath = path.join(__dirname, '..', req.file.path);
-    const workbook = XLSX.readFile(filePath);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const csvString = XLSX.utils.sheet_to_csv(sheet);
-    const lines = csvString.trim().split('\n');
+    const parser = fs
+      .createReadStream(filePath)
+      .pipe(parse({ delimiter: ',', from_line: 1, relax_quotes: true }));
 
     let skipCount = 0;
-    const rows = lines.map((line, index) => {
-      const columns = line
-        .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
-        .map(col => col.replace(/^"|"$/g, '').trim());
 
-      if (columns.length < 8) return null;
+    for await (const record of parser) {
+      if (record.length < 8) {
+        skipCount++;
+        continue;
+      }
 
-      const rawDate = columns[6];
-      const parsedDate = new Date(rawDate);
+      const rawDate = record[6];
+      const parsedDate = dayjs(rawDate, 'YYYY-MM-DD HH:mm:ss').toDate();
 
       if (isNaN(parsedDate.getTime())) {
         skipCount++;
-        console.warn(`[SKIP] Baris ke-${index + 1} memiliki tanggal tidak valid: "${rawDate}"`);
-        return null;
+        continue;
       }
 
-      return {
-        nama: columns[0],
-        instansi: columns[1],
-        departement: columns[2],
-        nohp: columns[3]?.toString(),
-        email: columns[4],
-        nopek: columns[5]?.toString(),
+      results.push({
+        nama: record[0],
+        instansi: record[1],
+        departement: record[2],
+        nohp: record[3],
+        email: record[4],
+        nopek: record[5],
         waktu: parsedDate,
-        area: columns[7]
-      };
-    }).filter(row => row !== null);
-
-    if (rows.length === 0) {
-      fs.unlinkSync(filePath);
-      return res.status(400).json({ message: 'Semua data tidak valid atau kosong.' });
+        area: record[7]
+      });
     }
 
-    const chunkSize = 500;
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize);
-      await Attendance.bulkCreate(chunk);
+    if (results.length > 0) {
+      const chunkSize = 500;
+      for (let i = 0; i < results.length; i += chunkSize) {
+        const chunk = results.slice(i, i + chunkSize);
+        await Attendance.bulkCreate(chunk);
+      }
     }
 
     fs.unlinkSync(filePath);
 
     res.status(200).json({
-      message: 'Berhasil upload',
-      totalDiterima: rows.length,
+      message: 'Upload berhasil',
+      totalDiterima: results.length,
       totalDilewati: skipCount
     });
+
   } catch (err) {
     console.error('[UPLOAD ERROR]', err);
     res.status(500).json({ message: 'Upload gagal', error: err.message });
