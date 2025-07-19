@@ -12,6 +12,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "csv-parse": "^6.1.0",
+    "dayjs": "^1.11.13",
     "express": "^5.1.0",
     "multer": "^2.0.2",
     "mysql2": "^3.14.2",
