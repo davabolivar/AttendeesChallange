@@ -21,7 +21,25 @@ exports.getAttendanceRekap = async (req, res) => {
       current.add(1, 'days');
     }
 
-    const workers = await Worker.findAll();
+    // Ambil query filter
+    const tipe = req.query.tipe || 'Semua'; // 'Pekerja', 'Non-Pekerja', 'Semua'
+    const area = req.query.area || 'Semua';
+
+    const workerWhere = {};
+
+    if (tipe === 'Pekerja') {
+      workerWhere.isPekerja = 'y';
+    } else if (tipe === 'Non-Pekerja') {
+      workerWhere.isPekerja = '0';
+    }
+
+    if (area !== 'Semua') {
+      workerWhere.area = area;
+    }
+
+    const workers = await Worker.findAll({
+      where: workerWhere,
+    });
 
     const attendances = await Attendance.findAll({
       where: {
@@ -46,6 +64,7 @@ exports.getAttendanceRekap = async (req, res) => {
         nopek: worker.nopek,
         nama: worker.nama,
         area: worker.area,
+        isPekerja: worker.isPekerja,
         data: {},
         terlambat: 0,
         pulangCepat: 0,
@@ -85,11 +104,10 @@ exports.getAttendanceRekap = async (req, res) => {
             masuk,
             keluar,
             isHoliday,
-            isAbsent: 0, // hadir
+            isAbsent: 0,
           };
 
         } else {
-          // tidak ada data absensi
           row.data[date] = {
             masuk: '---',
             keluar: '---',
@@ -97,7 +115,7 @@ exports.getAttendanceRekap = async (req, res) => {
           };
 
           if (!isHoliday) {
-            row.data[date].isAbsent = 1; // alpha
+            row.data[date].isAbsent = 1;
           }
         }
       }
