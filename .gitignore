@@ -26,3 +26,5 @@ Thumbs.db
 coverage/
 dist/
 build/
+
+uploads/
